@@ -1,0 +1,996 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>STARTPLATZ · Partner Outreach Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg:#08090d;
+    --bg-elev:#111219;
+    --bg-elev2:#161822;
+    --border:#22242f;
+    --text:#eef0f4;
+    --text-dim:#9497a6;
+    --text-faint:#5c5f6e;
+    --gold:#e0b768;
+    --gold-dim:#e0b76822;
+    --silver:#c3c8d4;
+    --silver-dim:#c3c8d422;
+    --bronze:#cd8b5c;
+    --bronze-dim:#cd8b5c22;
+    --accent:#7ab800;
+    --accent-dim:#7ab80022;
+    --accent-light:#b7e64c;
+    --ready:#4ade80;
+    --warn:#f2b53d;
+    --bad:#7d818f;
+    --radius:14px;
+    --radius-sm:10px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    min-height:100vh;
+  }
+  a{color:var(--accent);}
+  ::selection{background:var(--accent-dim);color:var(--accent-light);}
+  button{font-family:inherit;}
+
+  /* ---------- Loader / Drop zone ---------- */
+  #dropzone{
+    position:fixed;inset:0;z-index:500;
+    display:flex;align-items:center;justify-content:center;
+    background:radial-gradient(ellipse at top,#141621 0%,#08090d 70%);
+    transition:opacity .3s ease;
+  }
+  #dropzone.hidden{opacity:0;pointer-events:none;}
+  .drop-card{
+    width:min(560px,90vw);padding:48px 40px;border:1.5px dashed #33364a;border-radius:20px;
+    text-align:center;background:var(--bg-elev);
+  }
+  .drop-card.drag-over{border-color:var(--accent);background:var(--accent-dim);}
+  .drop-card h1{font-size:22px;margin:0 0 8px;letter-spacing:-0.01em;}
+  .drop-card p{color:var(--text-dim);font-size:14px;line-height:1.6;margin:0 0 24px;}
+  .drop-card .logo{margin-bottom:18px;}
+  .drop-card .logo img{height:26px;background:#fff;border-radius:8px;padding:6px 12px;}
+  .btn{
+    display:inline-flex;align-items:center;gap:8px;background:var(--accent);color:#0c1400;
+    border:none;padding:12px 22px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;
+    transition:transform .15s ease, box-shadow .15s ease;
+  }
+  .btn:hover{transform:translateY(-1px);box-shadow:0 8px 24px -8px var(--accent-dim);}
+  .btn.secondary{background:var(--bg-elev2);color:var(--text);border:1px solid var(--border);}
+  #fileInput{display:none;}
+  .drop-status{margin-top:16px;font-size:12.5px;color:var(--text-faint);}
+  .spinner{width:16px;height:16px;border-radius:50%;border:2px solid #444;border-top-color:var(--accent);animation:spin .7s linear infinite;display:inline-block;vertical-align:middle;margin-right:8px;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  /* ---------- Shell / Sidebar ---------- */
+  #app{display:none;}
+  #app.ready{display:flex;min-height:100vh;}
+  .sidebar{
+    width:216px;flex-shrink:0;background:var(--bg-elev);border-right:1px solid var(--border);
+    padding:20px 12px;display:flex;flex-direction:column;gap:2px;position:sticky;top:0;height:100vh;
+  }
+  .sidebar-brand{display:flex;align-items:center;gap:10px;padding:6px 8px 20px;}
+  .logo-badge{background:#fff;border-radius:8px;padding:5px 9px;display:inline-flex;align-items:center;line-height:0;}
+  .logo-badge img{height:18px;width:auto;display:block;}
+  .sidebar-brand .sub{font-size:11px;color:var(--text-faint);}
+  .nav-item{
+    display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;border:none;
+    background:transparent;color:var(--text-dim);font-size:13.5px;font-weight:600;cursor:pointer;
+    text-align:left;width:100%;border-left:2px solid transparent;
+  }
+  .nav-item:hover{background:var(--bg-elev2);color:var(--text);}
+  .nav-item.active{background:var(--bg-elev2);color:var(--text);border-left-color:var(--accent);}
+  .nav-item svg{flex-shrink:0;opacity:.8;}
+  .sidebar-spacer{flex:1;}
+  .nav-item.subtle{color:var(--text-faint);font-size:12.5px;font-weight:500;}
+
+  .main{flex:1;min-width:0;padding:36px 44px 80px;max-width:1360px;}
+  section.view{display:none;}
+  section.view.active{display:block;}
+  h1.page-title{font-size:24px;font-weight:700;letter-spacing:-0.01em;margin:0 0 6px;}
+  p.page-sub{color:var(--text-dim);font-size:14px;margin:0 0 24px;max-width:640px;line-height:1.5;}
+  h2.section-title{font-size:12.5px;text-transform:uppercase;letter-spacing:.1em;color:var(--text-faint);margin:0 0 14px;font-weight:700;}
+
+  .exec-summary{
+    background:var(--bg-elev);border:1px solid var(--border);border-radius:var(--radius);
+    padding:18px 20px;font-size:14px;line-height:1.65;color:var(--text-dim);margin-bottom:32px;
+  }
+  .exec-summary b{color:var(--text);font-weight:700;}
+
+  /* ---------- KPI cards ---------- */
+  .kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:32px;}
+  .kpi-card{background:var(--bg-elev);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;}
+  .kpi-card .kpi-num{font-size:28px;font-weight:800;letter-spacing:-0.02em;line-height:1;margin-bottom:6px;color:var(--text);}
+  .kpi-card .kpi-label{font-size:12.5px;color:var(--text-dim);}
+  .kpi-card.hl .kpi-num{color:var(--accent);}
+
+  /* ---------- Charts row ---------- */
+  .charts-row{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;margin-bottom:8px;align-items:start;}
+  .chart-card{background:var(--bg-elev);border:1px solid var(--border);border-radius:var(--radius);padding:22px;}
+  .rank-list{display:flex;flex-direction:column;gap:13px;}
+  .rank-row .top{display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px;}
+  .rank-row .top .rn{color:var(--text);font-weight:600;}
+  .rank-row .top .rv{color:var(--text-dim);white-space:nowrap;}
+  .rank-row .top .rv b{color:var(--text);font-weight:700;}
+  .rank-track{height:8px;border-radius:5px;background:var(--bg-elev2);overflow:hidden;max-width:100%;}
+  .rank-fill{height:100%;border-radius:5px;background:linear-gradient(90deg,var(--accent),var(--accent-light));width:0;transition:width .8s cubic-bezier(.16,1,.3,1);}
+
+  .donut-wrap{display:flex;align-items:center;gap:22px;}
+  .donut-legend{flex:1;display:flex;flex-direction:column;gap:9px;}
+  .legend-row{display:flex;align-items:center;gap:9px;font-size:13px;}
+  .legend-row .dot{width:9px;height:9px;border-radius:3px;flex-shrink:0;}
+  .legend-row .name{flex:1;color:var(--text-dim);}
+  .legend-row .val{font-weight:700;}
+
+  /* ---------- Partner directory ---------- */
+  .toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:16px;}
+  .search-input{
+    flex:1;min-width:200px;background:var(--bg-elev);border:1px solid var(--border);
+    color:var(--text);padding:9px 14px;border-radius:9px;font-size:13.5px;outline:none;
+  }
+  .search-input:focus{border-color:#3a3d52;}
+  .chip{
+    padding:7px 13px;border-radius:8px;border:1px solid var(--border);background:var(--bg-elev);
+    color:var(--text-dim);font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap;
+  }
+  .chip.active{background:var(--bg-elev2);color:var(--text);border-color:#3a3d52;}
+  .chip-group{display:flex;gap:6px;}
+  .chip-group.dezent .chip{font-size:11.5px;padding:6px 10px;color:var(--text-faint);}
+  .chip-group.dezent .chip.active{color:var(--text-dim);}
+  .toolbar-spacer{flex:1;}
+  .export-menu{position:relative;}
+  .export-btn{
+    background:var(--bg-elev);border:1px solid var(--border);color:var(--text-dim);
+    padding:8px 13px;border-radius:9px;font-size:12.5px;font-weight:600;cursor:pointer;
+  }
+  .export-btn:hover{color:var(--text);}
+  .export-dropdown{
+    display:none;position:absolute;right:0;top:calc(100% + 6px);background:var(--bg-elev2);
+    border:1px solid var(--border);border-radius:10px;padding:6px;min-width:200px;z-index:20;
+    box-shadow:0 12px 32px -8px #000000aa;
+  }
+  .export-dropdown.open{display:block;}
+  .export-dropdown button{
+    display:block;width:100%;text-align:left;background:transparent;border:none;color:var(--text-dim);
+    padding:8px 10px;border-radius:6px;font-size:12.5px;cursor:pointer;
+  }
+  .export-dropdown button:hover{background:var(--bg-elev);color:var(--text);}
+  .result-count{font-size:12px;color:var(--text-faint);margin-bottom:12px;}
+
+  .table-scroll{overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius);}
+  table.partner-table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:760px;}
+  table.partner-table thead th{
+    text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--text-faint);
+    font-weight:700;padding:12px 16px;background:var(--bg-elev);border-bottom:1px solid var(--border);
+    position:sticky;top:0;
+  }
+  table.partner-table tbody td{padding:11px 16px;border-bottom:1px solid var(--border);color:var(--text-dim);vertical-align:middle;}
+  table.partner-table tbody tr{background:var(--bg-elev);cursor:pointer;transition:background .12s;}
+  table.partner-table tbody tr:hover{background:var(--bg-elev2);}
+  table.partner-table tbody tr:last-child td{border-bottom:none;}
+  .cell-company{display:flex;align-items:center;gap:10px;color:var(--text);font-weight:600;}
+  .avatar{
+    width:26px;height:26px;border-radius:7px;background:var(--bg-elev2);color:var(--text-dim);
+    display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:700;flex-shrink:0;border:1px solid var(--border);
+  }
+  .cell-link{color:var(--accent);text-decoration:none;}
+  .cell-link:hover{text-decoration:underline;}
+  .cell-muted{color:var(--text-faint);}
+  .status-dot{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;color:var(--text-dim);}
+  .status-dot::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--dot,var(--bad));}
+  .status-Ready::before{background:var(--ready);}
+  .status-MissingEmail::before,.status-MissingContact::before{background:var(--warn);}
+  .status-NotReady::before{background:var(--bad);}
+  .row-action{
+    background:var(--bg-elev2);border:1px solid var(--border);color:var(--text-dim);
+    padding:5px 11px;border-radius:7px;font-size:11.5px;font-weight:600;cursor:pointer;
+  }
+  .row-action:hover{color:var(--text);}
+
+  /* ---------- Sources view ---------- */
+  .src-list{display:flex;flex-direction:column;gap:10px;}
+  .src-row{
+    background:var(--bg-elev);border:1px solid var(--border);border-radius:12px;padding:16px 18px;
+    display:grid;grid-template-columns:1.3fr 1.6fr 1fr;gap:16px;align-items:start;
+  }
+  .src-row .name{font-weight:700;font-size:14px;display:flex;align-items:center;gap:8px;color:var(--text);}
+  .src-row .networks{font-size:12.5px;color:var(--text-dim);line-height:1.6;}
+  .src-row .links{font-size:12px;display:flex;flex-direction:column;gap:4px;}
+  .src-row .links a{color:var(--accent);text-decoration:none;word-break:break-all;}
+  .src-row .links a:hover{text-decoration:underline;}
+  .src-status{font-size:11px;color:var(--text-faint);}
+  .badge{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;padding:3px 8px;border-radius:20px;white-space:nowrap;}
+  .badge.tier-Gold{background:var(--gold-dim);color:var(--gold);}
+  .badge.tier-Silber{background:var(--silver-dim);color:var(--silver);}
+  .badge.tier-Bronze{background:var(--bronze-dim);color:var(--bronze);}
+  .badge.tier-Unbekannt{background:var(--bg-elev2);color:var(--text-faint);}
+
+  /* ---------- Detail panel ---------- */
+  #detailOverlay{position:fixed;inset:0;background:#000a;opacity:0;pointer-events:none;transition:opacity .2s;z-index:90;}
+  #detailOverlay.open{opacity:1;pointer-events:auto;}
+  #detailPanel{
+    position:fixed;top:0;right:0;height:100vh;width:420px;max-width:92vw;background:var(--bg-elev);
+    border-left:1px solid var(--border);z-index:91;transform:translateX(100%);transition:transform .25s cubic-bezier(.16,1,.3,1);
+    overflow-y:auto;padding:28px 26px 60px;
+  }
+  #detailPanel.open{transform:translateX(0);}
+  .detail-close{
+    position:absolute;top:20px;right:20px;background:var(--bg-elev2);border:1px solid var(--border);
+    color:var(--text-dim);width:30px;height:30px;border-radius:8px;cursor:pointer;font-size:15px;
+  }
+  .detail-close:hover{color:var(--text);}
+  .detail-name{font-size:20px;font-weight:800;letter-spacing:-0.01em;margin:0 0 8px;padding-right:40px;}
+  .detail-badges{display:flex;gap:8px;margin-bottom:24px;flex-wrap:wrap;}
+  .detail-section{margin-bottom:22px;}
+  .detail-section h3{font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--text-faint);margin:0 0 10px;font-weight:700;}
+  .detail-field{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--border);font-size:13.5px;}
+  .detail-field:last-child{border-bottom:none;}
+  .detail-field .k{color:var(--text-faint);flex-shrink:0;}
+  .detail-field .v{color:var(--text);text-align:right;word-break:break-word;}
+  .detail-field .v.muted{color:var(--text-faint);font-style:italic;}
+  .detail-text{
+    font-size:13.5px;line-height:1.6;color:var(--text-dim);background:var(--bg-elev2);
+    padding:12px 14px;border-radius:9px;border-left:2.5px solid var(--accent);
+  }
+  .detail-text.muted{color:var(--text-faint);font-style:italic;border-left-color:var(--border);}
+  .detail-links{display:flex;flex-direction:column;gap:6px;}
+  .detail-links a{color:var(--accent);text-decoration:none;font-size:12.5px;word-break:break-all;}
+  .detail-links a:hover{text-decoration:underline;}
+
+  footer.note{margin-top:40px;padding-top:18px;border-top:1px solid var(--border);font-size:11.5px;color:var(--text-faint);line-height:1.7;}
+
+  @media (max-width:960px){
+    #app.ready{flex-direction:column;}
+    .sidebar{width:100%;height:auto;position:static;flex-direction:row;align-items:center;padding:12px 16px;overflow-x:auto;}
+    .sidebar-brand{padding:0 12px 0 0;}
+    .sidebar-spacer{display:none;}
+    .nav-item{width:auto;border-left:none;border-bottom:2px solid transparent;white-space:nowrap;}
+    .nav-item.active{border-left:none;border-bottom-color:var(--accent);}
+    .nav-item.subtle{margin-left:auto;}
+    .main{padding:24px 18px 60px;}
+    .kpi-grid{grid-template-columns:repeat(2,1fr);}
+    .charts-row{grid-template-columns:1fr;}
+    .src-row{grid-template-columns:1fr;}
+    #detailPanel{width:100%;max-width:100%;}
+  }
+</style>
+</head>
+<body>
+
+<div id="dropzone">
+  <div class="drop-card" id="dropCard">
+    <div class="logo"><img src="https://res.cloudinary.com/startplatz/image/upload/v1614775778/logos/STARTPLATZ_Logos/STARTPLATZ_Logo_RGB.png" alt="STARTPLATZ"></div>
+    <h1>Partner Outreach Dashboard</h1>
+    <p id="dropText">Excel-Datei per Drag &amp; Drop hier ablegen, oder auswählen.<br>Alles läuft lokal im Browser, es wird nichts hochgeladen.</p>
+    <button class="btn" id="pickBtn">Datei auswählen</button>
+    <input type="file" id="fileInput" accept=".xlsx,.xls">
+    <div class="drop-status" id="dropStatus"></div>
+  </div>
+</div>
+
+<div id="app">
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <span class="logo-badge"><img src="https://res.cloudinary.com/startplatz/image/upload/v1614775778/logos/STARTPLATZ_Logos/STARTPLATZ_Logo_RGB.png" alt="STARTPLATZ"></span>
+    </div>
+    <button class="nav-item active" data-view="dashboard">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><rect x="1.5" y="1.5" width="6" height="6" rx="1.3" stroke="currentColor" stroke-width="1.4"/><rect x="8.5" y="1.5" width="6" height="6" rx="1.3" stroke="currentColor" stroke-width="1.4"/><rect x="1.5" y="8.5" width="6" height="6" rx="1.3" stroke="currentColor" stroke-width="1.4"/><rect x="8.5" y="8.5" width="6" height="6" rx="1.3" stroke="currentColor" stroke-width="1.4"/></svg>
+      Dashboard
+    </button>
+    <button class="nav-item" data-view="partners">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><circle cx="2.3" cy="3" r="1.1" fill="currentColor"/><circle cx="2.3" cy="8" r="1.1" fill="currentColor"/><circle cx="2.3" cy="13" r="1.1" fill="currentColor"/><path d="M5.5 3H14M5.5 8H14M5.5 13H14" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+      Partner
+    </button>
+    <button class="nav-item" data-view="sources">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M6.5 9.5L9.5 6.5M6.8 4.6l.7-.7a2.4 2.4 0 013.4 3.4l-.7.7M9.2 11.4l-.7.7a2.4 2.4 0 01-3.4-3.4l.7-.7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+      Quellen
+    </button>
+    <button class="nav-item" data-view="newpartners">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+      Partner-Pipeline
+    </button>
+    <div class="sidebar-spacer"></div>
+    <button class="nav-item subtle" id="reloadBtn">Neue Datei laden</button>
+  </aside>
+
+  <main class="main">
+    <!-- ============= DASHBOARD ============= -->
+    <section class="view active" id="view-dashboard">
+      <h1 class="page-title">STARTPLATZ Partner Outreach Dashboard</h1>
+      <p class="page-sub">Strategische Übersicht aller identifizierten Kooperationspartner und aktuelle Outreach-Bereitschaft.</p>
+      <div class="exec-summary" id="execSummary"></div>
+
+      <div class="kpi-grid" id="kpiGrid"></div>
+
+      <div class="charts-row">
+        <div class="chart-card">
+          <h2 class="section-title">Branchenranking</h2>
+          <div class="rank-list" id="dashBranchen"></div>
+        </div>
+        <div class="chart-card">
+          <h2 class="section-title">Prioritätsverteilung</h2>
+          <div class="donut-wrap">
+            <svg width="130" height="130" viewBox="0 0 140 140" id="donutSvg"></svg>
+            <div class="donut-legend" id="donutLegend"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============= PARTNER DIRECTORY ============= -->
+    <section class="view" id="view-partners">
+      <h1 class="page-title">Partner</h1>
+      <p class="page-sub">Operative Arbeitsansicht. Automatisch nach Priorität sortiert – wichtigste Partner oben.</p>
+
+      <div class="toolbar">
+        <input class="search-input" id="searchInput" placeholder="Unternehmen suchen…">
+        <div class="chip-group" id="statusFilter">
+          <button class="chip active" data-status="all">Alle</button>
+          <button class="chip" data-status="Ready">Ready</button>
+          <button class="chip" data-status="MissingEmail">Missing Email</button>
+          <button class="chip" data-status="MissingContact">Missing Contact</button>
+          <button class="chip" data-status="NotReady">Not Ready</button>
+        </div>
+        <div class="chip-group dezent" id="priorityFilter">
+          <button class="chip active" data-prio="all">Alle Prioritäten</button>
+          <button class="chip" data-prio="Gold">Gold</button>
+          <button class="chip" data-prio="Silber">Silber</button>
+          <button class="chip" data-prio="Bronze">Bronze</button>
+        </div>
+        <div class="toolbar-spacer"></div>
+        <div class="export-menu">
+          <button class="export-btn" id="exportBtn">Export ▾</button>
+          <div class="export-dropdown" id="exportDropdown">
+            <button data-export="ready">Outreach-Ready (CSV)</button>
+            <button data-export="missing">Fehlende Daten (CSV)</button>
+            <button data-export="all">Alle Partner (CSV)</button>
+          </div>
+        </div>
+      </div>
+      <div class="result-count" id="resultCount"></div>
+
+      <div class="table-scroll">
+        <table class="partner-table">
+          <thead>
+            <tr>
+              <th>Company</th>
+              <th>Ansprechpartner</th>
+              <th>E-Mail</th>
+              <th>Website</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="partnerTableBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============= SOURCES ============= -->
+    <section class="view" id="view-sources">
+      <h1 class="page-title">Recherche &amp; Quellen</h1>
+      <p class="page-sub">Woher stammen die Daten – Netzwerkherkunft und Quellenlinks pro Unternehmen.</p>
+      <div class="toolbar">
+        <input class="search-input" id="srcSearchInput" placeholder="Unternehmen suchen…">
+      </div>
+      <div class="src-list" id="srcList"></div>
+      <footer class="note" id="footNote"></footer>
+    </section>
+
+    <!-- ============= WEITERE PARTNER ============= -->
+    <section class="view" id="view-newpartners">
+      <h1 class="page-title">Partner-Pipeline</h1>
+      <p class="page-sub">Neu identifizierte Unternehmen aus weiteren deutschen Acceleratoren/Corporate-Programmen. Ansprechpartner & E-Mail bereits für alle recherchiert – Qualität variiert je nach öffentlicher Verfügbarkeit.</p>
+      <div class="toolbar">
+        <input class="search-input" id="npSearchInput" placeholder="Unternehmen oder Accelerator suchen…">
+      </div>
+      <div class="result-count" id="npResultCount"></div>
+      <div class="table-scroll">
+        <table class="partner-table">
+          <thead>
+            <tr>
+              <th>Unternehmen</th>
+              <th>Quell-Accelerator</th>
+              <th>Ansprechpartner</th>
+              <th>E-Mail</th>
+              <th>Research-Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="newPartnerTableBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div id="detailOverlay"></div>
+<aside id="detailPanel"></aside>
+
+<script>
+(function(){
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  function norm(s){ return (s==null? '' : s.toString().trim()); }
+  function pick(row, keys){
+    for(const k of keys){ const v = row[k]; if(v!=null && norm(v)!=='') return norm(v); }
+    return null;
+  }
+
+  // ---------- sources / links ----------
+  function parseSources(quellenStr, quelleStr){
+    const links = [];
+    const add = (raw) => {
+      raw = norm(raw); if(!raw) return;
+      let label = null, url = raw;
+      const m = raw.match(/^(.*?):\s*(https?:\/\/.+)$/i);
+      if(m){ label = m[1].trim(); url = m[2].trim(); }
+      const urlMatch = url.match(/https?:\/\/[^\s]+/);
+      if(urlMatch){ links.push({label, url:urlMatch[0]}); }
+      else if(raw && !/^https?:/i.test(raw)){ links.push({label: raw, url:null}); }
+    };
+    (quellenStr||'').split(';').forEach(add);
+    if(quelleStr && quelleStr !== quellenStr) add(quelleStr);
+    const seen = new Set(); const out=[];
+    links.forEach(l=>{ const k=l.url||l.label; if(k && !seen.has(k)){seen.add(k); out.push(l);} });
+    return out;
+  }
+
+  // =========================================================
+  // Data normalization + helper functions (bot-compatible API)
+  // =========================================================
+
+  function normalizePartner(raw){
+    const name = pick(raw, ['Unternehmen','Company','Firma','Name']);
+    let ansprechpartner = pick(raw, ['Ansprechpartner','Kontaktperson / Team','Ansprechpartner / Team','Contact','Kontakt']);
+    if(ansprechpartner && /nicht auffindbar/i.test(ansprechpartner)) ansprechpartner = null;
+    const rawContactValue = pick(raw, ['E-Mail / Formular-URL','E-Mail','Email','Mail','Kontaktformular','Website','Webseite','URL']);
+    const isEmail = rawContactValue ? EMAIL_RE.test(rawContactValue) : false;
+    return {
+      name,
+      ansprechpartner,
+      email: isEmail ? rawContactValue : null,
+      website: (!isEmail && rawContactValue) ? rawContactValue : null,
+      linkedin: pick(raw, ['LinkedIn']),
+      branche: pick(raw, ['Branche','Industry']),
+      region: pick(raw, ['Region']),
+      land: pick(raw, ['Land','Country']),
+      priorityRaw: pick(raw, ['Priorität','Priority','Tier']),
+      warum: pick(raw, ['Warum interessant?','Warum STARTPLATZ?','Warum']),
+      hook: pick(raw, ['Erstkontakt-Aufhänger','Outreach Hook','Hook']),
+      netzwerkrelevanz: pick(raw, ['Im Netzwerk von','Netzwerkrelevanz','Relevance']),
+      netzwerkAnzahl: raw['Netzwerk-Anzahl'] || 0,
+      notizen: pick(raw, ['Notizen','Notes']),
+      status: pick(raw, ['Status']),
+      kategorie: pick(raw, ['Kategorie']),
+      isScaleup: pick(raw, ['Kategorie']) === 'Scale-up / Future Partner',
+      quellen: parseSources(raw['Quellen'], raw['Quelle'])
+    };
+  }
+
+  function getPartnerPriority(partner){
+    const raw = (partner.priorityRaw || '').toLowerCase();
+    if(raw === 'gold') return 'Gold';
+    if(raw === 'silber' || raw === 'silver') return 'Silber';
+    if(raw === 'bronze') return 'Bronze';
+    if(raw === 'future') return 'Future';
+    return 'Unbekannt';
+  }
+
+  function getPriorityRank(priority){
+    if(priority === 'Gold') return 1;
+    if(priority === 'Silber') return 2;
+    if(priority === 'Bronze' || priority === 'Future') return 3;
+    return 4;
+  }
+
+  function getSortedPartners(partners){
+    return [...partners].sort((a,b)=>{
+      const ra = getPriorityRank(getPartnerPriority(a));
+      const rb = getPriorityRank(getPartnerPriority(b));
+      if(ra !== rb) return ra - rb;
+      return (a.name||'').localeCompare(b.name||'', 'de');
+    });
+  }
+
+  // Ready: Ansprechpartner + echte E-Mail vorhanden.
+  // Missing Email: Ansprechpartner bekannt, aber keine E-Mail (z.B. nur Kontaktformular).
+  // Missing Contact: kein Ansprechpartner, aber Firma inhaltlich bereits eingeordnet (Branche/Region/Hook bekannt).
+  // Not Ready: so gut wie keine verwertbaren Daten vorhanden.
+  function getPartnerStatus(partner){
+    const hasContact = !!partner.ansprechpartner;
+    const hasEmail = !!partner.email;
+    const hasContext = !!(partner.branche || partner.region || partner.warum || partner.hook);
+    if(hasContact && hasEmail) return 'Ready';
+    if(hasContact && !hasEmail) return 'MissingEmail';
+    if(!hasContact && hasContext) return 'MissingContact';
+    return 'NotReady';
+  }
+
+  const STATUS_LABEL = { Ready:'Ready', MissingEmail:'Missing Email', MissingContact:'Missing Contact', NotReady:'Not Ready' };
+
+  function getOutreachReadyPartners(partners){
+    return partners.filter(p => getPartnerStatus(p) === 'Ready');
+  }
+
+  function calculateDashboardMetrics(partners){
+    const total = partners.length;
+    const withContact = partners.filter(p=>p.ansprechpartner).length;
+    const withEmail = partners.filter(p=>p.email).length;
+    const outreachReady = getOutreachReadyPartners(partners).length;
+    const goldCount = partners.filter(p=>getPartnerPriority(p)==='Gold').length;
+    const industries = new Set(partners.map(p=>p.branche).filter(Boolean));
+    return { total, withContact, withEmail, outreachReady, goldCount, industryCount: industries.size };
+  }
+
+  function getIndustryRanking(partners){
+    const counts = {};
+    partners.forEach(p=>{ const b = p.branche || 'Unbekannt'; counts[b] = (counts[b]||0)+1; });
+    const total = partners.length || 1;
+    return Object.entries(counts)
+      .map(([branche,count])=>({branche,count,pct: count/total*100}))
+      .sort((a,b)=>b.count-a.count);
+  }
+
+  // =========================================================
+  // CSV export
+  // =========================================================
+  function csvEscape(v){
+    v = (v==null? '' : String(v));
+    if(/[",\n;]/.test(v)) return '"' + v.replace(/"/g,'""') + '"';
+    return v;
+  }
+  function toCSV(partners){
+    const header = ['Company','Ansprechpartner','E-Mail','Website','Status','Priorität','Branche','Outreach Hook'];
+    const rows = partners.map(p => [
+      p.name, p.ansprechpartner||'', p.email||'', p.website||'',
+      STATUS_LABEL[getPartnerStatus(p)], getPartnerPriority(p), p.branche||'', p.hook||''
+    ]);
+    return [header, ...rows].map(r=>r.map(csvEscape).join(',')).join('\n');
+  }
+  function downloadCSV(filename, partners){
+    const csv = toCSV(partners);
+    const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  // =========================================================
+  // Loading the workbook
+  // =========================================================
+  let PARTNERS = [];
+  let NEW_PARTNERS = [];
+  const state = { search:'', status:'all', priority:'all' };
+  const npState = { search:'' };
+
+  function loadWorkbook(wb){
+    const sheet = (name) => XLSX.utils.sheet_to_json(wb.Sheets[name], {defval:null});
+
+    const master = sheet('02_Corporate_Master');
+    PARTNERS = master.map(r=>normalizePartner(r)).filter(p=>p.name);
+
+    const newSheetName = '07_Weitere_Potenzielle_Partner';
+    NEW_PARTNERS = wb.Sheets[newSheetName] ? sheet(newSheetName).map(r=>({
+      name: pick(r, ['Unternehmen']),
+      accelerator: pick(r, ['Quell-Accelerator']),
+      quellUrl: pick(r, ['Quell-URL']),
+      status: pick(r, ['Status']),
+      hinzugefuegt: pick(r, ['Hinzugefügt am']),
+      ansprechpartner: pick(r, ['Ansprechpartner']),
+      rolle: pick(r, ['Rolle']),
+      email: pick(r, ['E-Mail']),
+      linkedin: pick(r, ['LinkedIn']),
+      website: pick(r, ['Website']),
+      kontaktquelle: pick(r, ['Kontaktquelle']),
+      researchStatus: pick(r, ['Research Status']),
+      notizen: pick(r, ['Notizen'])
+    })).filter(p=>p.name) : [];
+
+    render();
+  }
+
+  function el(html){ const d=document.createElement('div'); d.innerHTML=html.trim(); return d.firstChild; }
+  function fmt(n){ return n.toLocaleString('de-DE'); }
+  function initials(name){
+    const parts = name.split(/\s+/).filter(Boolean);
+    return ((parts[0]||'')[0] + (parts[1]? parts[1][0] : '')).toUpperCase();
+  }
+
+  // =========================================================
+  // Dashboard
+  // =========================================================
+  function renderDashboard(){
+    const m = calculateDashboardMetrics(PARTNERS);
+
+    document.getElementById('execSummary').innerHTML =
+      `Insgesamt wurden <b>${fmt(m.total)}</b> potenzielle Kooperationspartner identifiziert. Davon verfügen
+       <b>${fmt(m.withContact)}</b> bereits über einen Ansprechpartner und <b>${fmt(m.withEmail)}</b> über eine
+       E-Mail-Adresse. <b>${fmt(m.outreachReady)}</b> Partner sind vollständig outreach-bereit. Die Partnerliste
+       ist automatisch nach Priorität sortiert – die ${fmt(m.goldCount)} Gold-Partner stehen ganz oben.`;
+
+    const kpis = [
+      {n:fmt(m.total), l:'Partner gesamt'},
+      {n:fmt(m.withContact), l:'Ansprechpartner vorhanden'},
+      {n:fmt(m.withEmail), l:'E-Mails vorhanden'},
+      {n:fmt(m.outreachReady), l:'Outreach Ready', hl:true},
+      {n:fmt(m.goldCount), l:'Gold Partner'},
+      {n:fmt(m.industryCount), l:'Branchen'},
+    ];
+    document.getElementById('kpiGrid').innerHTML = kpis.map(k=>
+      `<div class="kpi-card ${k.hl?'hl':''}"><div class="kpi-num">${k.n}</div><div class="kpi-label">${k.l}</div></div>`
+    ).join('');
+
+    const ranking = getIndustryRanking(PARTNERS);
+    const TOP_N = 6;
+    const top = ranking.slice(0, TOP_N);
+    const restCount = ranking.slice(TOP_N).reduce((s,r)=>s+r.count,0);
+    const rows = restCount>0 ? [...top, {branche:'Weitere Branchen', count:restCount, pct: restCount/PARTNERS.length*100}] : top;
+    const max = rows.length ? Math.max(...rows.map(r=>r.count)) : 0;
+    const list = document.getElementById('dashBranchen');
+    list.innerHTML = rows.map(r=>{
+      const barPct = max? (r.count/max*100) : 0;
+      return `<div class="rank-row">
+        <div class="top"><span class="rn">${r.branche}</span><span class="rv"><b>${r.count}</b> · ${r.pct.toFixed(1)}%</span></div>
+        <div class="rank-track"><div class="rank-fill" data-pct="${barPct}"></div></div>
+      </div>`;
+    }).join('');
+    requestAnimationFrame(()=>{ list.querySelectorAll('.rank-fill').forEach(f=>{ f.style.width = f.dataset.pct+'%'; }); });
+
+    renderDonut();
+  }
+
+  const TIER_HEX = {Gold:'#e0b768', Silber:'#c3c8d4', Bronze:'#cd8b5c', Future:'#8fb8e0', Unbekannt:'#4a4d5c'};
+
+  function renderDonut(){
+    const counts = {};
+    PARTNERS.forEach(p=>{ const t = getPartnerPriority(p); counts[t] = (counts[t]||0)+1; });
+    const tiers = Object.keys(counts).sort((a,b)=>getPriorityRank(a)-getPriorityRank(b));
+    const total = PARTNERS.length || 1;
+    const r = 52, cx=65, cy=65, circumference = 2*Math.PI*r;
+    let offset = 0;
+    const svg = document.getElementById('donutSvg');
+    svg.setAttribute('viewBox','0 0 130 130');
+    svg.innerHTML = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#1c1e29" stroke-width="15"></circle>`;
+    tiers.forEach(tier=>{
+      const frac = counts[tier]/total;
+      const len = frac*circumference;
+      const circle = document.createElementNS('http://www.w3.org/2000/svg','circle');
+      circle.setAttribute('cx',cx); circle.setAttribute('cy',cy); circle.setAttribute('r',r);
+      circle.setAttribute('fill','none');
+      circle.setAttribute('stroke', TIER_HEX[tier] || '#666');
+      circle.setAttribute('stroke-width','15');
+      circle.setAttribute('stroke-dasharray', `${len} ${circumference-len}`);
+      circle.setAttribute('stroke-dashoffset', -offset);
+      circle.setAttribute('transform', `rotate(-90 ${cx} ${cy})`);
+      svg.appendChild(circle);
+      offset += len;
+    });
+    const legend = document.getElementById('donutLegend');
+    legend.innerHTML = tiers.map(tier=>`<div class="legend-row">
+      <span class="dot" style="background:${TIER_HEX[tier]||'#666'}"></span>
+      <span class="name">${tier}</span>
+      <span class="val">${counts[tier]}</span>
+    </div>`).join('');
+  }
+
+  // =========================================================
+  // Partner directory
+  // =========================================================
+  function matchesFilters(p){
+    if(state.search && !(p.name||'').toLowerCase().includes(state.search.toLowerCase())) return false;
+    if(state.status!=='all' && getPartnerStatus(p)!==state.status) return false;
+    if(state.priority!=='all' && getPartnerPriority(p)!==state.priority) return false;
+    return true;
+  }
+
+  function renderPartnerTable(){
+    const list = getSortedPartners(PARTNERS).filter(matchesFilters);
+    const tbody = document.getElementById('partnerTableBody');
+    tbody.innerHTML = list.map((p,i)=>{
+      const status = getPartnerStatus(p);
+      return `<tr data-idx="${PARTNERS.indexOf(p)}">
+        <td><div class="cell-company"><span class="avatar">${initials(p.name)}</span>${p.name}</div></td>
+        <td>${p.ansprechpartner || '<span class="cell-muted">—</span>'}</td>
+        <td>${p.email ? `<a class="cell-link" href="mailto:${p.email}" onclick="event.stopPropagation()">${p.email}</a>` : '<span class="cell-muted">—</span>'}</td>
+        <td>${p.website ? `<a class="cell-link" href="${p.website}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${p.website.replace(/^https?:\/\//,'').slice(0,28)}</a>` : '<span class="cell-muted">—</span>'}</td>
+        <td><span class="status-dot status-${status}">${STATUS_LABEL[status]}</span></td>
+        <td><button class="row-action" data-detail="${PARTNERS.indexOf(p)}">Details</button></td>
+      </tr>`;
+    }).join('');
+    document.getElementById('resultCount').textContent = `${list.length} von ${PARTNERS.length} Partnern`;
+
+    tbody.querySelectorAll('tr').forEach(tr=>{
+      tr.addEventListener('click', ()=>openDetail(PARTNERS[+tr.dataset.idx]));
+    });
+    tbody.querySelectorAll('[data-detail]').forEach(btn=>{
+      btn.addEventListener('click', (e)=>{ e.stopPropagation(); openDetail(PARTNERS[+btn.dataset.detail]); });
+    });
+  }
+
+  // =========================================================
+  // Weitere potenzielle Partner (noch nicht evaluiert)
+  // =========================================================
+  function renderNewPartnerTable(){
+    const q = npState.search.toLowerCase();
+    const list = NEW_PARTNERS.filter(p =>
+      !q || (p.name||'').toLowerCase().includes(q) || (p.accelerator||'').toLowerCase().includes(q)
+    );
+    const tbody = document.getElementById('newPartnerTableBody');
+    tbody.innerHTML = list.map(p=>{
+      const dotClass = p.researchStatus === 'Found' ? 'status-Ready' : 'status-NotReady';
+      const contact = p.ansprechpartner ? `${p.ansprechpartner}${p.rolle ? ` <span class="cell-muted">(${p.rolle})</span>` : ''}` : '<span class="cell-muted">—</span>';
+      const email = p.email ? `<a class="cell-link" href="mailto:${p.email}">${p.email}</a>` : '<span class="cell-muted">—</span>';
+      return `<tr>
+        <td><div class="cell-company"><span class="avatar">${initials(p.name)}</span>${p.name}</div></td>
+        <td>${p.accelerator || '<span class="cell-muted">—</span>'}</td>
+        <td>${contact}</td>
+        <td>${email}</td>
+        <td><span class="status-dot ${dotClass}">${p.researchStatus || 'Nicht recherchiert'}</span></td>
+        <td>${p.quellUrl ? `<a class="cell-link" href="${p.quellUrl}" target="_blank" rel="noopener">Quelle</a>` : ''}</td>
+      </tr>`;
+    }).join('');
+    document.getElementById('npResultCount').textContent = `${list.length} von ${NEW_PARTNERS.length} weiteren Partnern`;
+  }
+
+  // =========================================================
+  // Company detail panel
+  // =========================================================
+  function fieldRow(label, value, muted){
+    return `<div class="detail-field"><span class="k">${label}</span><span class="v ${muted?'muted':''}">${value}</span></div>`;
+  }
+  function textBlock(label, value){
+    const has = value && value.trim();
+    return `<div class="detail-section"><h3>${label}</h3><div class="detail-text ${has?'':'muted'}">${has? value : 'Nicht vorhanden'}</div></div>`;
+  }
+
+  function openDetail(p){
+    const tier = getPartnerPriority(p);
+    const status = getPartnerStatus(p);
+    const panel = document.getElementById('detailPanel');
+    panel.innerHTML = `
+      <button class="detail-close" id="detailCloseBtn">✕</button>
+      <div class="detail-name">${p.name}</div>
+      <div class="detail-badges">
+        <span class="badge tier-${tier}">${tier}</span>
+        <span class="status-dot status-${status}">${STATUS_LABEL[status]}</span>
+      </div>
+      <div class="detail-section">
+        <h3>Kontakt</h3>
+        ${fieldRow('Ansprechpartner', p.ansprechpartner || 'Nicht vorhanden', !p.ansprechpartner)}
+        ${fieldRow('E-Mail', p.email ? `<a href="mailto:${p.email}">${p.email}</a>` : 'Nicht vorhanden', !p.email)}
+        ${fieldRow('Website', p.website ? `<a href="${p.website}" target="_blank" rel="noopener">${p.website}</a>` : 'Nicht vorhanden', !p.website)}
+        ${fieldRow('LinkedIn', p.linkedin ? `<a href="${p.linkedin}" target="_blank" rel="noopener">${p.linkedin}</a>` : 'Nicht vorhanden', !p.linkedin)}
+      </div>
+      <div class="detail-section">
+        <h3>Einordnung</h3>
+        ${fieldRow('Branche', p.branche || 'Nicht vorhanden', !p.branche)}
+        ${fieldRow('Region', p.region || 'Nicht vorhanden', !p.region)}
+        ${fieldRow('Land', p.land || 'Nicht vorhanden', !p.land)}
+        ${p.isScaleup ? fieldRow('Kategorie', 'Scale-up / Future Partner', false) : ''}
+      </div>
+      ${textBlock('Warum STARTPLATZ?', p.warum)}
+      ${textBlock('Outreach Hook', p.hook)}
+      ${textBlock('Netzwerkrelevanz', p.netzwerkrelevanz)}
+      ${textBlock('Notizen', p.notizen)}
+      <div class="detail-section">
+        <h3>Quellen</h3>
+        <div class="detail-links">
+          ${p.quellen.length ? p.quellen.map(s=> s.url
+              ? `<a href="${s.url}" target="_blank" rel="noopener">${s.label? s.label+': ':''}${s.url}</a>`
+              : `<span style="color:var(--text-faint)">${s.label}</span>`
+            ).join('') : '<span style="color:var(--text-faint);font-style:italic;">Keine Quelle hinterlegt</span>'}
+        </div>
+      </div>
+    `;
+    document.getElementById('detailCloseBtn').addEventListener('click', closeDetail);
+    document.getElementById('detailOverlay').classList.add('open');
+    panel.classList.add('open');
+  }
+  function closeDetail(){
+    document.getElementById('detailOverlay').classList.remove('open');
+    document.getElementById('detailPanel').classList.remove('open');
+  }
+  document.getElementById('detailOverlay').addEventListener('click', closeDetail);
+
+  // =========================================================
+  // Sources view
+  // =========================================================
+  function renderSources(){
+    const q = (document.getElementById('srcSearchInput').value||'').toLowerCase();
+    const list = getSortedPartners(PARTNERS).filter(p=>!q || p.name.toLowerCase().includes(q));
+    const wrap = document.getElementById('srcList');
+    wrap.innerHTML = list.map(p=>{
+      const tier = getPartnerPriority(p);
+      const links = p.quellen.map(s=> s.url
+        ? `<a href="${s.url}" target="_blank" rel="noopener">${s.label?s.label+': ':''}${s.url}</a>`
+        : `<span>${s.label}</span>`
+      ).join('') || '<span style="color:var(--text-faint)">Keine Quelle hinterlegt</span>';
+      return `<div class="src-row">
+        <div>
+          <div class="name"><span class="badge tier-${tier}">${tier}</span> ${p.name}</div>
+          <div class="src-status">${p.status||''}</div>
+        </div>
+        <div class="networks">${p.netzwerkrelevanz ? 'Im Netzwerk von: '+p.netzwerkrelevanz : (p.netzwerkAnzahl? p.netzwerkAnzahl+'x im Ökosystem gelistet' : 'Direkt recherchiert')}</div>
+        <div class="links">${links}</div>
+      </div>`;
+    }).join('');
+    document.getElementById('footNote').textContent =
+      'Datenbasis: STARTPLATZ Ecosystem Intelligence Database. Klick auf einen Partner in der Partner-Ansicht öffnet die vollständige Detailansicht inkl. Quellen.';
+  }
+
+  // =========================================================
+  // Render / wiring
+  // =========================================================
+  function render(){
+    renderDashboard();
+    renderPartnerTable();
+    renderSources();
+    renderNewPartnerTable();
+  }
+
+  function activateView(view){
+    document.querySelectorAll('.nav-item[data-view]').forEach(b=>b.classList.toggle('active', b.dataset.view===view));
+    document.querySelectorAll('section.view').forEach(v=>v.classList.toggle('active', v.id==='view-'+view));
+  }
+  document.querySelectorAll('.nav-item[data-view]').forEach(btn=>{
+    btn.addEventListener('click', ()=>activateView(btn.dataset.view));
+  });
+
+  document.getElementById('searchInput').addEventListener('input', e=>{ state.search=e.target.value; renderPartnerTable(); });
+  document.getElementById('srcSearchInput').addEventListener('input', renderSources);
+  document.getElementById('npSearchInput').addEventListener('input', e=>{ npState.search=e.target.value; renderNewPartnerTable(); });
+
+  document.querySelectorAll('#statusFilter .chip').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('#statusFilter .chip').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      state.status = btn.dataset.status;
+      renderPartnerTable();
+    });
+  });
+  document.querySelectorAll('#priorityFilter .chip').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('#priorityFilter .chip').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      state.priority = btn.dataset.prio;
+      renderPartnerTable();
+    });
+  });
+
+  const exportBtn = document.getElementById('exportBtn');
+  const exportDropdown = document.getElementById('exportDropdown');
+  exportBtn.addEventListener('click', (e)=>{ e.stopPropagation(); exportDropdown.classList.toggle('open'); });
+  document.addEventListener('click', ()=>exportDropdown.classList.remove('open'));
+  exportDropdown.querySelectorAll('[data-export]').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      exportDropdown.classList.remove('open');
+      if(btn.dataset.export==='ready') downloadCSV('startplatz-outreach-ready.csv', getOutreachReadyPartners(PARTNERS));
+      else if(btn.dataset.export==='missing') downloadCSV('startplatz-missing-data.csv', PARTNERS.filter(p=>getPartnerStatus(p)!=='Ready'));
+      else downloadCSV('startplatz-all-partners.csv', getSortedPartners(PARTNERS));
+    });
+  });
+
+  // =========================================================
+  // File loading (unchanged mechanics)
+  // =========================================================
+  function showApp(){
+    document.getElementById('dropzone').classList.add('hidden');
+    document.getElementById('app').classList.add('ready');
+  }
+  function readFile(file){
+    const status = document.getElementById('dropStatus');
+    status.innerHTML = '<span class="spinner"></span> Lese Datei…';
+    const reader = new FileReader();
+    reader.onload = (e)=>{
+      try{
+        const wb = XLSX.read(e.target.result, {type:'array'});
+        loadWorkbook(wb);
+        showApp();
+      }catch(err){
+        status.textContent = 'Konnte Datei nicht lesen: ' + err.message;
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  document.getElementById('pickBtn').addEventListener('click', ()=>document.getElementById('fileInput').click());
+  document.getElementById('fileInput').addEventListener('change', (e)=>{ if(e.target.files[0]) readFile(e.target.files[0]); });
+  document.getElementById('reloadBtn').addEventListener('click', ()=>{
+    document.getElementById('dropzone').classList.remove('hidden');
+    document.getElementById('dropText').textContent = 'Neue Excel-Datei laden – ersetzt die aktuelle Ansicht.';
+  });
+
+  const dropCard = document.getElementById('dropCard');
+  ['dragenter','dragover'].forEach(evt=>{
+    dropCard.addEventListener(evt, (e)=>{ e.preventDefault(); dropCard.classList.add('drag-over'); });
+  });
+  ['dragleave','drop'].forEach(evt=>{
+    dropCard.addEventListener(evt, (e)=>{ e.preventDefault(); dropCard.classList.remove('drag-over'); });
+  });
+  dropCard.addEventListener('drop', (e)=>{
+    e.preventDefault();
+    const file = e.dataTransfer.files[0];
+    if(file) readFile(file);
+  });
+
+  const status = document.getElementById('dropStatus');
+
+  // Verschluesselte Daten (AES-256-GCM): Passwortabfrage, Entschluesselung im Browser
+  async function decryptData(buf, password){
+    const bytes = new Uint8Array(buf);
+    const magic = new TextDecoder().decode(bytes.slice(0,8));
+    if(magic !== 'SPDASH01') throw new Error('bad format');
+    const salt = bytes.slice(8,24), iv = bytes.slice(24,36), ct = bytes.slice(36);
+    const keyMaterial = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveKey']);
+    const key = await crypto.subtle.deriveKey(
+      {name:'PBKDF2', salt, iterations:300000, hash:'SHA-256'},
+      keyMaterial, {name:'AES-GCM', length:256}, false, ['decrypt']);
+    return crypto.subtle.decrypt({name:'AES-GCM', iv}, key, ct);
+  }
+
+  function askPassword(encBuf){
+    status.innerHTML = '';
+    const box = document.createElement('div');
+    box.style.cssText = 'margin-top:14px;display:flex;gap:8px;justify-content:center;align-items:center;flex-wrap:wrap;';
+    box.innerHTML = `
+      <input type="password" id="pwInput" placeholder="Passwort" autocomplete="current-password"
+        style="padding:9px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg-elev2);color:var(--text);font-size:14px;width:200px;">
+      <button id="pwBtn" class="btn" style="padding:9px 16px;">Entsperren</button>
+      <div id="pwMsg" style="width:100%;font-size:12.5px;color:var(--warn);"></div>`;
+    status.replaceChildren(box);
+    const tryUnlock = async ()=>{
+      const pw = document.getElementById('pwInput').value;
+      if(!pw) return;
+      document.getElementById('pwMsg').textContent = '';
+      document.getElementById('pwBtn').textContent = 'Prüfe…';
+      try{
+        const plain = await decryptData(encBuf, pw);
+        sessionStorage.setItem('dashPw', pw);
+        const wb = XLSX.read(plain, {type:'array'});
+        loadWorkbook(wb);
+        showApp();
+      }catch(e){
+        document.getElementById('pwBtn').textContent = 'Entsperren';
+        document.getElementById('pwMsg').textContent = 'Falsches Passwort.';
+      }
+    };
+    document.getElementById('pwBtn').addEventListener('click', tryUnlock);
+    document.getElementById('pwInput').addEventListener('keydown', e=>{ if(e.key==='Enter') tryUnlock(); });
+    document.getElementById('pwInput').focus();
+  }
+
+  status.innerHTML = '<span class="spinner"></span> Lade Daten…';
+  fetch('./data.enc').then(r=>{
+    if(!r.ok) throw new Error('not found');
+    return r.arrayBuffer();
+  }).then(async encBuf=>{
+    const saved = sessionStorage.getItem('dashPw');
+    if(saved){
+      try{
+        const plain = await decryptData(encBuf, saved);
+        const wb = XLSX.read(plain, {type:'array'});
+        loadWorkbook(wb);
+        showApp();
+        return;
+      }catch(e){ sessionStorage.removeItem('dashPw'); }
+    }
+    askPassword(encBuf);
+  }).catch(()=>{
+    status.textContent = '';
+  });
+})();
+</script>
+</body>
+</html>

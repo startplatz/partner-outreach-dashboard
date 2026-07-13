@@ -1,0 +1,6 @@
+# Personenbezogene Daten - NIEMALS unverschluesselt committen (DSGVO)
+data.xlsx
+*.xlsx
+research_log.csv
+recherche/
+STARTPLATZ_Dashboard_standalone.html
