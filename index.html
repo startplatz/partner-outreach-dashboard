@@ -50,6 +50,7 @@
     transition:opacity .3s ease;
   }
   #dropzone.hidden{opacity:0;pointer-events:none;}
+  .btn.hidden{display:none;}
   .drop-card{
     width:min(560px,90vw);padding:48px 40px;border:1.5px dashed #33364a;border-radius:20px;
     text-align:center;background:var(--bg-elev);
@@ -270,8 +271,8 @@
   <div class="drop-card" id="dropCard">
     <div class="logo"><img src="https://res.cloudinary.com/startplatz/image/upload/v1614775778/logos/STARTPLATZ_Logos/STARTPLATZ_Logo_RGB.png" alt="STARTPLATZ"></div>
     <h1>Partner Outreach Dashboard</h1>
-    <p id="dropText">Excel-Datei per Drag &amp; Drop hier ablegen, oder auswählen.<br>Alles läuft lokal im Browser, es wird nichts hochgeladen.</p>
-    <button class="btn" id="pickBtn">Datei auswählen</button>
+    <p id="dropText">Die Daten sind aus Datenschutzgründen verschlüsselt.<br>Bitte Passwort eingeben – die Entschlüsselung läuft komplett lokal im Browser.</p>
+    <button class="btn hidden" id="pickBtn">Datei auswählen</button>
     <input type="file" id="fileInput" accept=".xlsx,.xls">
     <div class="drop-status" id="dropStatus"></div>
   </div>
@@ -909,7 +910,8 @@
   document.getElementById('fileInput').addEventListener('change', (e)=>{ if(e.target.files[0]) readFile(e.target.files[0]); });
   document.getElementById('reloadBtn').addEventListener('click', ()=>{
     document.getElementById('dropzone').classList.remove('hidden');
-    document.getElementById('dropText').textContent = 'Neue Excel-Datei laden – ersetzt die aktuelle Ansicht.';
+    document.getElementById('dropText').textContent = 'Neue Excel-Datei laden (lokale Vorschau) – ersetzt die aktuelle Ansicht.';
+    document.getElementById('pickBtn').classList.remove('hidden');
   });
 
   const dropCard = document.getElementById('dropCard');
